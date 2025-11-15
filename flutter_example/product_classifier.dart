@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:tflite_flutter/tflite_flutter.dart';
@@ -19,13 +18,15 @@ class ProductClassifier {
   Future<bool> loadModel() async {
     try {
       // โหลดโมเดล .tflite
-      _interpreter = await Interpreter.fromAsset('assets/models/product_classifier.tflite');
-      
+      _interpreter = await Interpreter.fromAsset(
+          'assets/models/product_classifier.tflite');
+
       // โหลด class names
-      String labelData = await rootBundle.loadString('assets/models/class_names.json');
+      String labelData =
+          await rootBundle.loadString('assets/models/class_names.json');
       List<dynamic> labelList = json.decode(labelData);
       _labels = labelList.cast<String>();
-      
+
       _isModelLoaded = true;
       print('โหลดโมเดลสำเร็จ: ${_labels!.length} คลาส');
       return true;
@@ -45,39 +46,39 @@ class ProductClassifier {
       // โหลดและเตรียมรูปภาพ
       Uint8List imageBytes = await imageFile.readAsBytes();
       img.Image? image = img.decodeImage(imageBytes);
-      
+
       if (image == null) {
         throw Exception('ไม่สามารถอ่านรูปภาพได้');
       }
 
       // ปรับขนาดรูปภาพ
       img.Image resizedImage = img.copyResize(
-        image, 
-        width: inputSize, 
+        image,
+        width: inputSize,
         height: inputSize,
       );
 
       // แปลงเป็น input tensor
       var input = _imageToByteListFloat32(resizedImage);
-      
+
       // เตรียม output tensor
-      var output = List.filled(1 * _labels!.length, 0.0)
-          .reshape([1, _labels!.length]);
-      
+      var output =
+          List.filled(1 * _labels!.length, 0.0).reshape([1, _labels!.length]);
+
       // ทำการทำนาย
       _interpreter!.run(input, output);
-      
+
       // หาผลลัพธ์ที่มีความมั่นใจสูงสุด
       double maxConfidence = 0;
       int maxIndex = 0;
-      
+
       for (int i = 0; i < output[0].length; i++) {
         if (output[0][i] > maxConfidence) {
           maxConfidence = output[0][i];
           maxIndex = i;
         }
       }
-      
+
       return ProductPrediction(
         barcode: _labels![maxIndex],
         confidence: maxConfidence,
@@ -86,7 +87,6 @@ class ProductClassifier {
           output[0].cast<double>(),
         ),
       );
-      
     } catch (e) {
       print('ข้อผิดพลาดในการจำแนกรูปภาพ: $e');
       return null;
@@ -94,6 +94,7 @@ class ProductClassifier {
   }
 
   /// แปลงรูปภาพเป็น byte list สำหรับ input tensor
+  /// ใช้ MobileNetV2 preprocessing: scale to [-1, 1]
   List<List<List<List<double>>>> _imageToByteListFloat32(img.Image image) {
     var convertedBytes = List.generate(
       1,
@@ -102,22 +103,31 @@ class ProductClassifier {
         (y) => List.generate(
           inputSize,
           (x) => List.generate(3, (c) {
-            int pixel = image.getPixel(x, y);
+            // ใช้ API ใหม่ของ image package
+            img.Pixel pixel = image.getPixel(x, y);
+            double value;
+
             switch (c) {
               case 0:
-                return (img.getRed(pixel) / 255.0); // Red
+                value = pixel.r.toDouble(); // Red
+                break;
               case 1:
-                return (img.getGreen(pixel) / 255.0); // Green
+                value = pixel.g.toDouble(); // Green
+                break;
               case 2:
-                return (img.getBlue(pixel) / 255.0); // Blue
+                value = pixel.b.toDouble(); // Blue
+                break;
               default:
-                return 0.0;
+                value = 0.0;
             }
+
+            // MobileNetV2 preprocessing: scale to [-1, 1]
+            return (value / 127.5) - 1.0;
           }),
         ),
       ),
     );
-    
+
     return convertedBytes;
   }
 
@@ -157,7 +167,7 @@ class ProductRecognitionDemo extends StatefulWidget {
 class _ProductRecognitionDemoState extends State<ProductRecognitionDemo> {
   final ProductClassifier _classifier = ProductClassifier();
   final ImagePicker _picker = ImagePicker();
-  
+
   File? _selectedImage;
   ProductPrediction? _prediction;
   bool _isModelLoaded = false;
@@ -180,7 +190,7 @@ class _ProductRecognitionDemoState extends State<ProductRecognitionDemo> {
     setState(() {
       _isModelLoaded = success;
     });
-    
+
     if (!success) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -199,13 +209,13 @@ class _ProductRecognitionDemoState extends State<ProductRecognitionDemo> {
         maxHeight: 1024,
         imageQuality: 85,
       );
-      
+
       if (image != null) {
         setState(() {
           _selectedImage = File(image.path);
           _prediction = null;
         });
-        
+
         await _classifyImage();
       }
     } catch (e) {
@@ -226,13 +236,13 @@ class _ProductRecognitionDemoState extends State<ProductRecognitionDemo> {
         maxHeight: 1024,
         imageQuality: 85,
       );
-      
+
       if (image != null) {
         setState(() {
           _selectedImage = File(image.path);
           _prediction = null;
         });
-        
+
         await _classifyImage();
       }
     } catch (e) {
@@ -247,13 +257,14 @@ class _ProductRecognitionDemoState extends State<ProductRecognitionDemo> {
 
   Future<void> _classifyImage() async {
     if (_selectedImage == null || !_isModelLoaded) return;
-    
+
     setState(() {
       _isProcessing = true;
     });
-    
+
     try {
-      ProductPrediction? result = await _classifier.classifyImage(_selectedImage!);
+      ProductPrediction? result =
+          await _classifier.classifyImage(_selectedImage!);
       setState(() {
         _prediction = result;
         _isProcessing = false;
@@ -262,7 +273,7 @@ class _ProductRecognitionDemoState extends State<ProductRecognitionDemo> {
       setState(() {
         _isProcessing = false;
       });
-      
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text('ไม่สามารถจำแนกรูปภาพได้: $e'),
@@ -300,7 +311,9 @@ class _ProductRecognitionDemoState extends State<ProductRecognitionDemo> {
                     Text(
                       _isModelLoaded ? 'โมเดลพร้อมใช้งาน' : 'กำลังโหลดโมเดล...',
                       style: TextStyle(
-                        color: _isModelLoaded ? Colors.green[800] : Colors.red[800],
+                        color: _isModelLoaded
+                            ? Colors.green[800]
+                            : Colors.red[800],
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -308,9 +321,9 @@ class _ProductRecognitionDemoState extends State<ProductRecognitionDemo> {
                 ),
               ),
             ),
-            
+
             SizedBox(height: 16),
-            
+
             // ปุ่มเลือกรูปภาพ
             Row(
               children: [
@@ -341,9 +354,9 @@ class _ProductRecognitionDemoState extends State<ProductRecognitionDemo> {
                 ),
               ],
             ),
-            
+
             SizedBox(height: 16),
-            
+
             // แสดงรูปภาพที่เลือก
             if (_selectedImage != null) ...[
               Card(
@@ -370,10 +383,9 @@ class _ProductRecognitionDemoState extends State<ProductRecognitionDemo> {
                   ],
                 ),
               ),
-              
               SizedBox(height: 16),
             ],
-            
+
             // แสดงผลการทำนาย
             if (_isProcessing) ...[
               Card(
@@ -403,7 +415,7 @@ class _ProductRecognitionDemoState extends State<ProductRecognitionDemo> {
                         ),
                       ),
                       SizedBox(height: 12),
-                      
+
                       // ผลลัพธ์หลัก
                       Container(
                         padding: EdgeInsets.all(12),
@@ -439,9 +451,9 @@ class _ProductRecognitionDemoState extends State<ProductRecognitionDemo> {
                           ],
                         ),
                       ),
-                      
+
                       SizedBox(height: 16),
-                      
+
                       // Top 3 predictions
                       Text(
                         'ผลการทำนายทั้งหมด (Top 3)',
@@ -452,20 +464,27 @@ class _ProductRecognitionDemoState extends State<ProductRecognitionDemo> {
                         ),
                       ),
                       SizedBox(height: 8),
-                      
-                      ...(_prediction!.top3Predictions.asMap().entries.map((entry) {
+
+                      ...(_prediction!.top3Predictions
+                          .asMap()
+                          .entries
+                          .map((entry) {
                         int index = entry.key;
                         String barcode = entry.value.key;
                         double confidence = entry.value.value;
-                        
+
                         return Container(
                           margin: EdgeInsets.only(bottom: 4),
-                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          padding:
+                              EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           decoration: BoxDecoration(
-                            color: index == 0 ? Colors.green[50] : Colors.grey[50],
+                            color:
+                                index == 0 ? Colors.green[50] : Colors.grey[50],
                             borderRadius: BorderRadius.circular(6),
                             border: Border.all(
-                              color: index == 0 ? Colors.green[200]! : Colors.grey[200]!,
+                              color: index == 0
+                                  ? Colors.green[200]!
+                                  : Colors.grey[200]!,
                             ),
                           ),
                           child: Row(
@@ -474,7 +493,8 @@ class _ProductRecognitionDemoState extends State<ProductRecognitionDemo> {
                                 width: 24,
                                 height: 24,
                                 decoration: BoxDecoration(
-                                  color: index == 0 ? Colors.green : Colors.grey,
+                                  color:
+                                      index == 0 ? Colors.green : Colors.grey,
                                   shape: BoxShape.circle,
                                 ),
                                 child: Center(
@@ -496,7 +516,9 @@ class _ProductRecognitionDemoState extends State<ProductRecognitionDemo> {
                                 '${(confidence * 100).toStringAsFixed(1)}%',
                                 style: TextStyle(
                                   fontWeight: FontWeight.bold,
-                                  color: index == 0 ? Colors.green[700] : Colors.grey[600],
+                                  color: index == 0
+                                      ? Colors.green[700]
+                                      : Colors.grey[600],
                                 ),
                               ),
                             ],
