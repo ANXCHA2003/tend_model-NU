@@ -1,0 +1,43 @@
+name: product_recognition_demo
+description: Demo app for Product Recognition using TensorFlow Lite
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: ">=3.10.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # TensorFlow Lite
+  tflite_flutter: ^0.10.4
+  
+  # Image processing
+  image: ^4.0.17
+  image_picker: ^0.8.9
+  
+  # UI
+  cupertino_icons: ^1.0.6
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  
+  # เพิ่มไฟล์โมเดลใน assets
+  assets:
+    - assets/models/product_classifier.tflite
+    - assets/models/class_names.json
+    
+  # เพิ่ม fonts (ถ้าต้องการ)
+  # fonts:
+  #   - family: Schyler
+  #     fonts:
+  #       - asset: fonts/Schyler-Regular.ttf
+  #       - asset: fonts/Schyler-Italic.ttf
+  #         style: italic
